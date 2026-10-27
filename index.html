@@ -1072,7 +1072,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   ["fPhoto", "fCam"].forEach((id) => $(id).addEventListener("change", () => { const f = $(id).files[0]; $(id).value = ""; analyzePhoto(f); }));
   let pendingFile = null, idItems = [];
   const toList = (res) => Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : Array.isArray(res?.foods) ? res.foods : [];
-  const errMsg = (e) => e?.code === "not_granted" ? (webMode ? "AI isn't connected. Open Profile and check the AI connection." : "Photo analysis needs permission. Allow it when asked, or log food by hand.") : e?.code === "rate_limited" ? "Too many photos just now. Wait a minute and try again." : e?.code === "image_rejected" ? "That image type or size wasn't accepted. Try a JPG or a smaller photo." : "Couldn't read that photo. Try again, or log it by hand.";
+  const errMsg = (e) => e?.code === "not_granted" ? (webMode ? "The AI server refused the request. Check the Worker settings in Cloudflare." :"Photo analysis needs permission. Allow it when asked, or log food by hand.") : e?.code === "rate_limited" ? "Too many photos just now. Wait a minute and try again." : e?.code === "image_rejected" ? "That image type or size wasn't accepted. Try a JPG or a smaller photo." : "Couldn't read that photo. Try again, or log it by hand.";
 
   // Step 1: identify only
   async function analyzePhoto(file) {
@@ -1283,18 +1283,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     s.limits = async () => ({ maxPromptBytes: 100000, images: { maxCount: 2, maxInputBytes: 25e6, mediaTypes: ["image/jpeg", "image/png", "image/webp"] } });
     return s;
   }
+  // Built-in AI server, same approach as the tashkeel app: no setup needed.
+  const DEFAULT_AI_URL = "https://burn-bank-ai.hamdeen96.workers.dev";
   function startWebMode() {
     webMode = true;
-    $("aiSettings").hidden = false;
     const ai = readAi();
-    $("aiUrl").value = ai.url || ""; $("aiPass").value = ai.pass || "";
-    if (ai.url && ai.pass) { setupPhoto(makeWorkerSample(ai.url, ai.pass)); $("aiState").textContent = "Saved"; }
-    else $("aiState").textContent = "Not connected yet";
+    const url = ai.url || DEFAULT_AI_URL;
+    $("aiUrl").value = url; $("aiPass").value = ai.pass || "";
+    setupPhoto(makeWorkerSample(url, ai.pass || ""));
   }
   $("aiSave").addEventListener("click", async () => {
     const url = $("aiUrl").value.trim(), pass = $("aiPass").value;
     const st = $("aiState");
-    if (!/^https:\/\//.test(url) || !pass) { st.textContent = "Enter an https address and the passcode"; st.style.color = "var(--warn)"; return; }
+    if (!/^https:\/\//.test(url)) { st.textContent = "Enter an https address"; st.style.color = "var(--warn)"; return; }
     try { localStorage.setItem(AI_KEY, JSON.stringify({ url, pass })); } catch (e) {}
     const api = makeWorkerSample(url, pass);
     st.textContent = "Testing…"; st.style.color = "var(--muted)";

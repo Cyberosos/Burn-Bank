@@ -33,13 +33,12 @@ Repo **Settings → Pages → Source: Deploy from a branch → Branch: `main`, f
 | Name | Type | Value |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Secret | your key from step 2 |
-| `APP_PASSCODE` | Secret | any password you make up |
 | `ALLOWED_ORIGINS` | Text | `https://cyberosos.github.io` |
 
-5. Copy the Worker's address, e.g. `https://burn-bank-ai.yourname.workers.dev`.
+5. Name the Worker exactly `burn-bank-ai` so its address matches the one built into the app.
 
-### 4. Connect the app
-Open the live site → **Profile → AI connection** → paste the Worker address and your passcode → **Save & test**. You should see **✓ Connected**.
+### 4. That's it
+The app has the Worker address built in (`https://burn-bank-ai.hamdeen96.workers.dev`), so the AI works as soon as the Worker is deployed. No passcode or setup in the app.
 
 ### 5. Install on your phone
 - **Android (Chrome):** ⋮ menu → **Add to Home screen / Install app**
@@ -48,4 +47,4 @@ Open the live site → **Profile → AI connection** → paste the Worker addres
 ## Good to know
 - **Cost:** each photo scan is roughly 1–3 US cents and each typed food lookup is a fraction of a cent, billed by Anthropic. You can set a monthly spend limit in the Anthropic console.
 - **Your data** is saved in your phone's browser on this website. Clearing the browser's site data erases it.
-- **Your key is safe:** it lives only in the Worker, never in the website. The passcode and allowed-website check stop other people from using your Worker.
+- **Your key is safe:** it lives only in the Worker, never in the website. The Worker only answers requests from your website. Set a monthly spend limit in the Anthropic console as a safety net.

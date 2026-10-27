@@ -4,15 +4,15 @@
 //
 // Settings (Cloudflare dashboard > your Worker > Settings > Variables and Secrets):
 //   ANTHROPIC_API_KEY  (Secret)  your key from console.anthropic.com
-//   APP_PASSCODE       (Secret)  any password you choose; you type the same one in the app
 //   ALLOWED_ORIGINS    (Text)    https://cyberosos.github.io   (comma-separate more if needed)
 //   MODEL              (Text)    optional, defaults to claude-sonnet-5-5
+// Like the tashkeel Worker, only your website is answered; no passcode is needed.
 
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     const allowed = (env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
-    const originOk = allowed.length === 0 || allowed.includes(origin);
+    const originOk = allowed.length > 0 && allowed.includes(origin);
     const cors = {
       "Access-Control-Allow-Origin": originOk && origin ? origin : allowed[0] || "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -24,9 +24,6 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method !== "POST") return reply({ error: "Use POST" }, 405, cors);
     if (!originOk) return reply({ error: "This website is not allowed" }, 403, cors);
-    if (!env.APP_PASSCODE || request.headers.get("X-App-Passcode") !== env.APP_PASSCODE) {
-      return reply({ error: "Wrong passcode" }, 401, cors);
-    }
     if (!env.ANTHROPIC_API_KEY) return reply({ error: "API key not set in the Worker" }, 500, cors);
 
     let body;
