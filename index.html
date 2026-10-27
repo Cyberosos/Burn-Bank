@@ -981,7 +981,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       addFood(f);
       $("fHint").textContent = "Added " + f.name + (f.grams ? " · " + fmt(f.grams) + " g" : "") + " · " + fmt(f.kcal) + " kcal (estimate). Tap × in the list to remove it.";
     } catch (err) {
-      $("fHint").textContent = err?.code === "not_granted" ? "Calorie lookup needs permission. Allow it when asked, or type the kcal yourself." : err?.code === "rate_limited" ? "Too many lookups just now. Wait a minute, or type the kcal yourself." : "Couldn't work out the calories. Try a clearer name, or type the kcal yourself.";
+      $("fHint").textContent = err?.code === "not_granted" ? "Calorie lookup needs permission. Allow it when asked, or type the kcal yourself." : err?.code === "rate_limited" ? "Too many lookups just now. Wait a minute, or type the kcal yourself." : "Couldn't work out the calories. Try a clearer name, or type the kcal yourself." + (webMode && err?.message ? " (" + (err.message === "network" ? "can't reach the AI server: check ALLOWED_ORIGINS in Cloudflare" : err.message) + ")" : "");
     } finally { autoBusy = false; $("fAddBtn").disabled = false; $("fAddBtn").textContent = "Add"; }
   });
 
