@@ -4,7 +4,7 @@
 
 A personal calorie bank. Food goes in, your body baseline and trust-weighted watch burn go out, and every 7,700 kcal you bank wins a kilo.
 
-**Live:** https://cyberosos.github.io/burn-bank/
+**Live:** https://cyberosos.github.io/Burn-Bank/
 
 ## What's in this repo
 
