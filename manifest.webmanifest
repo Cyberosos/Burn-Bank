@@ -1,0 +1,16 @@
+{
+  "name": "Burn Bank",
+  "short_name": "Burn Bank",
+  "description": "Personal calorie bank: every 7,700 kcal burned is a kilo won.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16100c",
+  "theme_color": "#16100c",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
