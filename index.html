@@ -584,6 +584,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
           <button type="button" class="chip">+ mayo</button>
           <button type="button" class="chip">fried</button>
           <button type="button" class="chip">+ sugar</button>
+          <button type="button" class="chip">ate the fat</button>
+          <button type="button" class="chip">fat trimmed off</button>
           <button type="button" class="chip">half eaten</button>
           <button type="button" class="chip">restaurant</button>
         </div>
@@ -605,7 +607,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v22</div>
+  <div class="ver" data-tabs="history">Burn Bank v23</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1006,7 +1008,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $("fHint").textContent = "Working out calories for " + name + "…";
     try {
       const res = await sampleApi.json(
-        "You are a careful nutrition estimator. Egyptian and Middle Eastern dishes are common. Estimate the calories for this food as typically prepared and eaten.\n\nFood: " + name.slice(0, 120) + "\nAmount: " + (grams > 0 ? grams + " g of the edible food" : "not given, so assume one typical single portion and say how many grams that is") + "\n\nReturn ONLY JSON like {\"name\":\"Koshari\",\"grams\":350,\"kcal\":520}. Keep the user's food name, just tidy the spelling.",
+        "You are a careful nutrition estimator. Egyptian and Middle Eastern dishes are common. Estimate the calories for this food as typically prepared and eaten. Grams are the cooked weight unless the user says raw. Cooked lean beef is about 200 kcal per 100 g, beef with fat about 270, separable beef fat about 680; raw meat has about 25% fewer kcal per gram than cooked.\n\nFood: " + name.slice(0, 120) + "\nAmount: " + (grams > 0 ? grams + " g of the edible food" : "not given, so assume one typical single portion and say how many grams that is") + "\n\nReturn ONLY JSON like {\"name\":\"Koshari\",\"grams\":350,\"kcal\":520}. Keep the user's food name, just tidy the spelling.",
         { modelTier: "default" });
       const num = (v) => parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")) || 0;
       const r = Array.isArray(res) ? res[0] : res;
@@ -1240,6 +1242,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const corr = (p.corrections || []).slice(-15);
     if (corr.length) parts.push("This user corrected your earlier portion guesses. Use these to calibrate how you judge sizes, especially for the same dishes: " + corr.map((c) => c.name + ": you guessed " + c.ai + " g, real was " + c.grams + " g").join("; ") + ".");
     parts.push("Foods with parts nobody eats (whole fish with head and bones, chicken or meat on the bone, shrimp in shells, fruit with peel or pits): give \"grams\" and \"kcal\" for the EDIBLE part only, and also give \"whole_grams\" for the total weight as served including bones, head, shell or peel. A whole grilled or fried fish is typically only 40–55% edible flesh. For other foods leave out whole_grams.");
+    parts.push("For meat, use COOKED values because the photo shows cooked food: lean beef about 200 kcal per 100 g, beef with its fat on about 270 kcal per 100 g, separable beef fat about 680 kcal per 100 g, cooked chicken breast about 165, lamb with fat about 290. If visible fat will be eaten (or the user says \"ate the fat\"), list the fat as its own item with its own grams. If the user says \"fat trimmed off\", count lean meat only. Bones are never eaten. Pan-fried meat usually carries some cooking fat, so add it as an item only if the user mentions oil or ghee.");
     parts.push("For calories use standard values per gram for the food as typically prepared. Return ONLY a JSON array like [{\"name\":\"Grilled tilapia\",\"grams\":260,\"kcal\":360,\"whole_grams\":540,\"hand_found\":true},{\"name\":\"Ful medames\",\"grams\":300,\"kcal\":330,\"hand_found\":true}]. If there is no food, return [].");
     return parts.join("\n\n");
   }
