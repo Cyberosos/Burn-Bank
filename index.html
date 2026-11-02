@@ -219,6 +219,8 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .daynav .linkbtn { width: auto; height: auto; border: none; font-size: 13px; padding: 2px 6px; white-space: nowrap; color: var(--gold); }
 .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; }
 .ledger.off .lrow:not(.total) .v { opacity: .35; text-decoration: line-through; }
+.fatseg { flex: 1 1 180px; padding: 2px; }
+.fatseg button { padding: 6px 8px; font-size: 13px; }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
@@ -584,8 +586,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
           <button type="button" class="chip">+ mayo</button>
           <button type="button" class="chip">fried</button>
           <button type="button" class="chip">+ sugar</button>
-          <button type="button" class="chip">ate the fat</button>
-          <button type="button" class="chip">fat trimmed off</button>
           <button type="button" class="chip">half eaten</button>
           <button type="button" class="chip">restaurant</button>
         </div>
@@ -607,7 +607,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v23</div>
+  <div class="ver" data-tabs="history">Burn Bank v24</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1084,22 +1084,35 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       const n = document.createElement("input"); n.type = "text"; n.value = it.name; n.id = "gN" + i; n.addEventListener("input", () => (it.name = n.value));
       const gr = document.createElement("input"); gr.type = "number"; gr.value = Math.round(it.grams || 0); gr.id = "gG" + i;
       const kc = document.createElement("input"); kc.type = "number"; kc.value = Math.round(it.kcal || 0); kc.id = "gK" + i;
-      const per = it.grams ? it.kcal / it.grams : 0;
-      gr.addEventListener("input", () => { it.grams = Number(gr.value) || 0; if (per) { it.kcal = Math.round(per * it.grams); kc.value = it.kcal; } });
+      const basePer = it.grams ? it.kcal / it.grams : 0;
+      const perNow = () => (it.mode === "lean" && it.perLean) ? it.perLean : (it.mode === "fat" && it.perFat) ? it.perFat : basePer;
+      const recalc = () => { const p = perNow(); if (p) { it.kcal = Math.round(p * it.grams); kc.value = it.kcal; } };
+      gr.addEventListener("input", () => { it.grams = Number(gr.value) || 0; recalc(); });
       kc.addEventListener("input", () => (it.kcal = Number(kc.value) || 0));
       const x = document.createElement("button"); x.type = "button"; x.className = "plus"; x.textContent = "+";
       x.setAttribute("aria-label", "Add " + it.name);
       x.onclick = () => addRows([r]);
       r.append(n, gr, kc, x);
+      if (it.perLean && it.perFat) {
+        const sub = document.createElement("div"); sub.className = "gsub";
+        const lab = document.createElement("span"); lab.textContent = "How did you eat it?";
+        const seg = document.createElement("div"); seg.className = "seg fatseg";
+        [["fat", "With fat"], ["lean", "Lean only"]].forEach(([m, t]) => {
+          const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.setAttribute("aria-pressed", String(it.mode === m));
+          b.onclick = () => { it.mode = m; seg.querySelectorAll("button").forEach((y) => y.setAttribute("aria-pressed", String(y === b))); recalc(); };
+          seg.appendChild(b);
+        });
+        sub.append(lab, seg); r.appendChild(sub);
+      }
       if (it.wholeGrams > it.grams * 1.1) {
         const ratio = (it.aiGrams || it.grams) / it.wholeGrams;
         const sub = document.createElement("div"); sub.className = "gsub";
         const info = document.createElement("span");
-        info.innerHTML = "Grams above = the part you eat. Whole as served ≈ <b></b> (head, bones, skin).";
+        info.innerHTML = "Grams above = the part you eat. Whole as served ≈ <b></b> including bones and other parts you don't eat.";
         info.querySelector("b").textContent = fmt(it.wholeGrams) + " g";
         const lab = document.createElement("label"); lab.htmlFor = "gW" + i; lab.textContent = "Weighed it whole?";
         const wi = document.createElement("input"); wi.type = "number"; wi.inputMode = "numeric"; wi.id = "gW" + i; wi.placeholder = "g on scale";
-        wi.addEventListener("input", () => { const v = Number(wi.value) || 0; if (!v) return; it.grams = Math.round(v * ratio); gr.value = it.grams; if (per) { it.kcal = Math.round(per * it.grams); kc.value = it.kcal; } });
+        wi.addEventListener("input", () => { const v = Number(wi.value) || 0; if (!v) return; it.grams = Math.round(v * ratio); gr.value = it.grams; recalc(); });
         sub.append(info, lab, wi); r.appendChild(sub);
       }
       g.appendChild(r);
@@ -1129,7 +1142,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   }
   function buildIdPrompt() {
     const notes = $("fNotes").value.trim().slice(0, 200);
-    const parts = ["Look at this photo and identify each distinct food or drink in it. Egyptian and Middle Eastern dishes are common (for example ful medames, ta'ameya, koshari, feteer, molokhia, mahshi, baladi bread). Be specific about the dish and how it's prepared, e.g. \"Fried ta'ameya\" rather than \"patties\". For each one, add a short \"where\" note so the user can find it, e.g. \"round bowl, top left\". Do not list the user's hand, plates, cups or cutlery."];
+    const parts = ["Look at this photo and identify each distinct food or drink in it. Egyptian and Middle Eastern dishes are common (for example ful medames, ta'ameya, koshari, feteer, molokhia, mahshi, baladi bread). Be specific about the dish and how it's prepared, e.g. \"Fried ta'ameya\" rather than \"patties\". For each one, add a short \"where\" note so the user can find it, e.g. \"round bowl, top left\". Do not list the user's hand, plates, cups or cutlery. Several pieces of the same food are ONE item (four pieces of beef = one \"Beef steak\" item)."];
     if (notes) parts.push("The user's notes about this meal: \"" + notes + "\".");
     const fx = (profile.nameFixes || []).slice(-15);
     if (fx.length) parts.push("This user corrected your food identification before. Learn from these: " + fx.map((f) => "you said \"" + f.ai + "\", it was \"" + f.real + "\"").join("; ") + ".");
@@ -1219,7 +1232,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       const res = await sampleApi.json(buildPrompt(confirmed), { images: sidePhoto ? [pendingFile, sidePhoto] : [pendingFile], modelTier: "complex" });
       const list = toList(res);
       const num = (v) => parseFloat(String(v ?? "").replace(/[^0-9.]/g, "")) || 0;
-      guesses = list.filter((x) => x && (x.name || x.food)).map((x) => ({ name: String(x.name || x.food), grams: num(x.grams ?? x.weight), aiGrams: num(x.grams ?? x.weight), kcal: num(x.kcal ?? x.calories), wholeGrams: num(x.whole_grams) }));
+      const notesNow = $("fNotes").value.toLowerCase(); const defMode = /trimmed|lean/.test(notesNow) ? "lean" : "fat";
+      guesses = list.filter((x) => x && (x.name || x.food)).map((x) => {
+        const g0 = num(x.grams ?? x.weight), kL = num(x.kcal_lean), kF = num(x.kcal_with_fat);
+        const it = { name: String(x.name || x.food), grams: g0, aiGrams: g0, kcal: num(x.kcal ?? x.calories), wholeGrams: num(x.whole_grams) };
+        if (g0 > 0 && kL > 0 && kF > kL) { it.perLean = kL / g0; it.perFat = kF / g0; it.mode = defMode; it.kcal = Math.round((defMode === "lean" ? kL : kF)); }
+        return it;
+      });
       pendingFile = null; sidePhoto = null; idItems = []; renderConfirm();
       let msg = guesses.length ? "Estimates — fix the grams if you know them, then add." : "Couldn't measure that. Try another photo, or log it by hand.";
       if (guesses.length && $("fHandIn").checked && list.some((x) => x && x.hand_found === false)) msg = "Couldn't spot your hand, so sizes are a rough guess. Check the grams.";
@@ -1242,8 +1261,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const corr = (p.corrections || []).slice(-15);
     if (corr.length) parts.push("This user corrected your earlier portion guesses. Use these to calibrate how you judge sizes, especially for the same dishes: " + corr.map((c) => c.name + ": you guessed " + c.ai + " g, real was " + c.grams + " g").join("; ") + ".");
     parts.push("Foods with parts nobody eats (whole fish with head and bones, chicken or meat on the bone, shrimp in shells, fruit with peel or pits): give \"grams\" and \"kcal\" for the EDIBLE part only, and also give \"whole_grams\" for the total weight as served including bones, head, shell or peel. A whole grilled or fried fish is typically only 40–55% edible flesh. For other foods leave out whole_grams.");
-    parts.push("For meat, use COOKED values because the photo shows cooked food: lean beef about 200 kcal per 100 g, beef with its fat on about 270 kcal per 100 g, separable beef fat about 680 kcal per 100 g, cooked chicken breast about 165, lamb with fat about 290. If visible fat will be eaten (or the user says \"ate the fat\"), list the fat as its own item with its own grams. If the user says \"fat trimmed off\", count lean meat only. Bones are never eaten. Pan-fried meat usually carries some cooking fat, so add it as an item only if the user mentions oil or ghee.");
-    parts.push("For calories use standard values per gram for the food as typically prepared. Return ONLY a JSON array like [{\"name\":\"Grilled tilapia\",\"grams\":260,\"kcal\":360,\"whole_grams\":540,\"hand_found\":true},{\"name\":\"Ful medames\",\"grams\":300,\"kcal\":330,\"hand_found\":true}]. If there is no food, return [].");
+    parts.push("Combine all pieces of the same food into ONE item with the total grams (four pieces of beef = one \"Beef steak\" item). Never list the same food twice. For meat, use COOKED values because the photo shows cooked food: lean beef about 200 kcal per 100 g, beef with its fat on about 270, lamb with fat about 290, lamb lean about 210, chicken with skin about 220, chicken breast without skin about 165. For any red meat or chicken that has visible fat or skin, give \"grams\" as the total cooked meat weight (without bones) and also give both \"kcal_with_fat\" (eaten with its fat or skin) and \"kcal_lean\" (fat or skin cut off and not eaten), and set \"kcal\" to kcal_with_fat. Bones are never eaten. Pan-fried meat carries some cooking fat, so add oil or ghee as an item only if the user mentions it.");
+    parts.push("For calories use standard values per gram for the food as typically prepared. Return ONLY a JSON array like [{\"name\":\"Beef steak\",\"grams\":350,\"kcal\":945,\"kcal_with_fat\":945,\"kcal_lean\":700,\"hand_found\":true},{\"name\":\"Grilled tilapia\",\"grams\":260,\"kcal\":360,\"whole_grams\":540,\"hand_found\":true},{\"name\":\"Ful medames\",\"grams\":300,\"kcal\":330,\"hand_found\":true}]. If there is no food, return [].");
     return parts.join("\n\n");
   }
   document.querySelectorAll("#chips .chip").forEach((c) => c.addEventListener("click", () => {
