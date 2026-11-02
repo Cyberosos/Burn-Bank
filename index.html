@@ -133,7 +133,7 @@ input[type=range] { width: 100%; accent-color: var(--ember); }
 
 /* history */
 .hist { display: flex; flex-direction: column; }
-.hrow { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: baseline; font-size: 15px; background: none; border-left: none; border-right: none; border-top: none; text-align: left; }
+.hrow { display: grid; grid-template-columns: 1fr auto auto 10px; gap: 12px; width: 100%; cursor: pointer; padding: 10px 0; border-bottom: 1px solid var(--line); align-items: baseline; font-size: 15px; background: none; border-left: none; border-right: none; border-top: none; text-align: left; }
 .hrow .d { color: var(--muted); }
 
 /* profile drawer */
@@ -209,6 +209,16 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .g-lbl { fill: var(--fg); font: 600 11px var(--font-body); }
 .g-sub { fill: var(--muted); font: 500 10px var(--font-body); }
 .g-gold { fill: var(--gold); font: 700 14px var(--font-display); }
+.daypick { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.daytitle { position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 2px 10px; border-radius: 10px; }
+.daytitle .display { font-size: 24px; font-weight: 700; }
+.daytitle .display::after { content: " \25BE"; font-size: 14px; color: var(--muted); }
+.daytitle input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
+.daynav.past { background: rgba(255,194,61,.08); border: 1px solid rgba(255,194,61,.35); border-radius: 14px; padding: 6px; }
+.daynav.past .daytitle .display { color: var(--gold); }
+.daynav .linkbtn { width: auto; height: auto; border: none; font-size: 13px; padding: 2px 6px; white-space: nowrap; color: var(--gold); }
+.toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)) !important; }
+.countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
 /* celebration */
@@ -330,7 +340,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   <!-- day nav -->
   <div class="daynav" data-tabs="today food burn">
     <button type="button" id="prevDay" aria-label="Previous day">‹</button>
-    <div style="text-align:center"><div class="display" id="dayTitle">Today</div><div class="hint num" id="daySub"></div></div>
+    <div class="daypick">
+      <label class="daytitle" for="dayDate"><span class="display" id="dayTitle">Today</span><span class="hint num" id="daySub"></span><input type="date" id="dayDate" aria-label="Pick a day"></label>
+      <button type="button" class="linkbtn" id="backToday" hidden>Back to today</button>
+    </div>
     <button type="button" id="nextDay" aria-label="Next day">›</button>
   </div>
 
@@ -340,6 +353,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <div class="lrow"><div class="k"><span>Body baseline</span><span>resting + everyday movement</span></div><div class="v out num" id="lBase">0</div></div>
     <div class="lrow"><div class="k"><span>Watch active burn</span><span id="lWatchSub">not logged</span></div><div class="v out num" id="lWatch">0</div></div>
     <div class="lrow total"><div class="k"><span><b>Day balance</b></span><span id="lTotalSub">deficit goes into the bank</span></div><div class="v num" id="lNet">0</div></div>
+    <label class="check countday"><input type="checkbox" id="countDay"> Count this day in my bank</label>
   </section>
   <div data-tabs="today"><div class="notice" id="dayWarn" hidden></div></div>
 
@@ -590,7 +604,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v20</div>
+  <div class="ver" data-tabs="history">Burn Bank v21</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -627,7 +641,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const dayIntake = (d) => (d?.foods || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0);
   const dayWatch = (d) => (d && d.watch ? d.watch * (d.trust ?? profile.trust) / 100 : 0);
   const dayBase = (k, d) => (k === today() || !d?.baseline ? currentBase(profile) : d.baseline);
-  const dayCounts = (d) => d && d.foods && d.foods.length > 0;
+  // A day counts once you have logged anything on it (even if you later remove all food), unless you switch it off.
+  const dayCounts = (d) => !!d && !d.skip && ((d.foods && d.foods.length > 0) || !!d.touched);
   const dayDeficit = (k, d) => dayBase(k, d) + dayWatch(d) - dayIntake(d); // positive = burnt more
   const inBank = (k) => !profile.bankStart || k >= profile.bankStart;
   function bank() { let b = 0; for (const k in days) if (inBank(k) && dayCounts(days[k])) b += dayDeficit(k, days[k]); return b; }
@@ -638,8 +653,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
   // ---------- persistence ----------
   function persistProfile() { saveLocal(); backend?.saveProfile(profile).catch(() => toast("Couldn't sync profile — saved on this device")); }
-  function persistDay(k) {
+  function persistDay(k, touch = true) {
     const d = days[k]; if (k === today()) d.baseline = currentBase(profile);
+    if (touch) d.touched = true;
     if (d.gym === undefined) d.gym = null;
     d.foods = (d.foods || []).map((f) => { const o = { id: f.id || uid(), name: String(f.name || "Food"), kcal: Math.round(Number(f.kcal) || 0) }; if (Number(f.grams) > 0) o.grams = Math.round(Number(f.grams)); return o; });
     saveLocal();
@@ -744,6 +760,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $("dayTitle").textContent = isToday ? "Today" : dt.toLocaleDateString("en-US", { weekday: "long" });
     $("daySub").textContent = dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     $("nextDay").disabled = isToday;
+    $("backToday").hidden = isToday;
+    $("dayDate").value = k; $("dayDate").max = today();
+    document.querySelector(".daynav").classList.toggle("past", !isToday);
     const intake = dayIntake(d), base = dayBase(k, d), w = dayWatch(d);
     $("lIn").textContent = fmt(intake);
     $("lFoodN").textContent = (d?.foods?.length || 0) + " item" + ((d?.foods?.length || 0) === 1 ? "" : "s");
@@ -754,7 +773,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const nEl = $("lNet");
     nEl.textContent = (net >= 0 ? "+" : "−") + fmt(Math.abs(net));
     nEl.className = "v num " + (net >= 0 ? "pos" : "neg");
-    $("lTotalSub").textContent = !dayCounts(d) ? "log food to count this day" : net >= 0 ? "deficit added to the bank" : "surplus taken from the bank";
+    $("lTotalSub").textContent = d?.skip ? "not counted (switched off)" : !dayCounts(d) ? "not counted yet: log food or tick below" : net >= 0 ? "deficit added to the bank" : "surplus taken from the bank";
+    $("countDay").checked = dayCounts(d);
     const dw = $("dayWarn");
     if (dayCounts(d) && intake > 0 && intake < 1200) { dw.hidden = false; dw.textContent = "Under 1,200 kcal eaten so far. Very low intake slows your metabolism and costs muscle. If the day is done, consider a proper meal."; }
     else dw.hidden = true;
@@ -784,8 +804,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       const row = document.createElement("button"); row.type = "button"; row.className = "hrow num";
       const lab = i === 0 ? "Today" : i === 1 ? "Yesterday" : dd.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
       const counts = dayCounts(day); const df = counts ? dayDeficit(kk, day) : 0; const out = !inBank(kk);
-      row.innerHTML = `<span class="d">${lab}</span><span class="in">${counts ? fmt(dayIntake(day)) + " in" : "—"}</span><span class="${counts && !out ? (df >= 0 ? "pos" : "neg") : "d"}">${counts ? (df >= 0 ? "+" : "−") + fmt(Math.abs(df)) + (out ? " · before reset" : "") : "not logged"}</span>`;
-      row.addEventListener("click", () => { viewKey = kk; render(); setTab("today"); });
+      row.innerHTML = `<span class="d">${lab}</span><span class="in">${counts ? fmt(dayIntake(day)) + " in" : "—"}</span><span class="${counts && !out ? (df >= 0 ? "pos" : "neg") : "d"}">${counts ? (df >= 0 ? "+" : "−") + fmt(Math.abs(df)) + (out ? " · before reset" : "") : day?.skip ? "not counted" : "not logged"}</span><span class="d" aria-hidden="true">›</span>`;
+      row.setAttribute("aria-label", "Open " + lab + " to edit");
+      row.addEventListener("click", () => { viewKey = kk; render(); setTab("food"); toast("Editing " + (kk === today() ? "today" : lab)); });
       h.appendChild(row);
     }
   }
@@ -830,7 +851,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   $("saveProfile").addEventListener("click", () => {
     profile = { ...draftProfile(), isExample: false };
     if (days[today()]) days[today()].baseline = currentBase(profile);
-    persistProfile(); if (days[today()]) persistDay(today());
+    persistProfile(); if (days[today()]) persistDay(today(), false);
     $("drawer").hidden = true; toast("Profile saved — baseline " + fmt(currentBase(profile)) + " kcal/day"); render(); checkKilos();
   });
 
@@ -851,6 +872,14 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   });
 
   // ---------- day nav ----------
+  $("dayDate").addEventListener("change", () => { const v = $("dayDate").value; if (v && v <= today()) { viewKey = v; render(); } });
+  $("backToday").addEventListener("click", () => { viewKey = today(); render(); });
+  $("countDay").addEventListener("change", () => {
+    const d = getDay(viewKey);
+    if ($("countDay").checked) { d.skip = false; d.touched = true; } else { d.skip = true; }
+    persistDay(viewKey, false); render(); checkKilos();
+    toast($("countDay").checked ? "This day now counts in your bank" : "This day no longer counts");
+  });
   $("prevDay").addEventListener("click", () => { const d = parseKey(viewKey); d.setDate(d.getDate() - 1); viewKey = dkey(d); render(); });
   $("nextDay").addEventListener("click", () => { const d = parseKey(viewKey); d.setDate(d.getDate() + 1); const k = dkey(d); viewKey = k > today() ? today() : k; render(); });
 
