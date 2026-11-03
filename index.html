@@ -156,7 +156,13 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .gsub { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin: -2px 0 4px; }
 .gsub b { color: var(--gold); font-weight: 600; }
 .gsub input { width: 84px; padding: 6px 8px; }
-.wk { display: grid; grid-template-columns: minmax(0,1fr) 84px 36px; gap: 8px; align-items: center; }
+.wk { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.wk-top { display: grid; grid-template-columns: minmax(0,1fr) 36px; gap: 8px; align-items: center; }
+.wk-nums { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.wk-nums label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.wk-nums input { padding: 9px 8px; }
+.wk-res { font-size: 12.5px; color: var(--muted); }
+.wk-res b { color: var(--ember); }
 .wk-head { font-size: 13px; }
 .wk .x { background: none; border: none; color: var(--muted); font-size: 22px; padding: 0; height: 36px; }
 .restart-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
@@ -376,9 +382,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     </div>
     <label class="check"><input type="checkbox" id="wGym"> I went to the gym</label>
     <div class="panel" id="gymRow" hidden style="gap:8px">
-      <div class="wk wk-head hint"><span>Workout</span><span>Minutes</span><span></span></div>
       <div id="gymList" class="panel" style="gap:8px"></div>
       <button type="button" class="btn btn-ghost" id="addWorkout">+ Add another workout</button>
+      <p class="hint" style="margin:0">Add the band's calories for each workout too. Then workouts are counted from your heart rate, and the trust % only applies to the rest of your day.</p>
     </div>
     <div class="est" id="wEst" hidden></div>
     <div class="field"><label for="wTrust">Trust this reading: <span class="trust-val num" id="wTrustVal">75%</span> <span id="wCounted" class="num"></span></label><input id="wTrust" type="range" min="30" max="100" step="5"></div>
@@ -607,7 +613,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v24</div>
+  <div class="ver" data-tabs="history">Burn Bank v25</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -642,7 +648,18 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   const formulaBase = (p) => Math.round(bmr(p) * p.activity);
   const currentBase = (p) => (p.override ? Number(p.override) : formulaBase(p));
   const dayIntake = (d) => (d?.foods || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0);
-  const dayWatch = (d) => (d && d.watch ? d.watch * (d.trust ?? profile.trust) / 100 : 0);
+  // Workouts with their own band kcal are taken out of the band's day total and counted from heart rate instead;
+  // the trust % then applies only to the everyday part.
+  const dayWorkouts = (d) => (Array.isArray(d?.gym) ? d.gym : []);
+  const daySplit = (d) => { const g = dayWorkouts(d); return g.length > 0 && g.every((x) => Number(x.band) > 0); };
+  const dayWatch = (d) => {
+    if (!d) return 0;
+    const t = (d.trust ?? profile.trust) / 100;
+    if (!daySplit(d)) return d.watch ? d.watch * t : 0;
+    const g = dayWorkouts(d);
+    const everyday = Math.max(0, (Number(d.watch) || 0) - g.reduce((s, x) => s + Number(x.band), 0));
+    return everyday * t + g.reduce((s, x) => s + (Number(x.kcal) || 0), 0);
+  };
   const dayBase = (k, d) => (k === today() || !d?.baseline ? currentBase(profile) : d.baseline);
   // A day counts only when it has food, so removing all food removes the whole day (baseline included).
   // "fast" lets a genuine no-food day count; "skip" leaves a day with food out.
@@ -771,7 +788,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $("lFoodN").textContent = (d?.foods?.length || 0) + " item" + ((d?.foods?.length || 0) === 1 ? "" : "s");
     $("lBase").textContent = "−" + fmt(base);
     $("lWatch").textContent = "−" + fmt(w);
-    $("lWatchSub").textContent = d?.watch ? fmt(d.watch) + " read × " + (d.trust ?? profile.trust) + "% trust" : "not logged";
+    if (daySplit(d)) {
+      const g = dayWorkouts(d); const everyday = Math.max(0, (Number(d.watch) || 0) - g.reduce((s, x) => s + Number(x.band), 0));
+      $("lWatchSub").textContent = "everyday " + fmt(everyday) + " × " + (d.trust ?? profile.trust) + "% + workouts " + fmt(g.reduce((s, x) => s + (Number(x.kcal) || 0), 0));
+    } else $("lWatchSub").textContent = d?.watch ? fmt(d.watch) + " read × " + (d.trust ?? profile.trust) + "% trust" : "not logged";
     const net = base + w - intake;
     const nEl = $("lNet");
     nEl.textContent = (net >= 0 ? "+" : "−") + fmt(Math.abs(net));
@@ -821,7 +841,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function updateTrustLabel() {
     const t = Number($("wTrust").value); $("wTrustVal").textContent = t + "%";
     const w = Number($("wKcal").value) || 0;
-    $("wCounted").textContent = w ? "→ counts " + fmt(w * t / 100) + " kcal" : "";
+    let e = null; try { e = stepsEstimate(); } catch (err) {}
+    if (e && e.split) { const ev = Math.max(0, w - e.bandW); $("wCounted").textContent = "→ counts " + fmt(ev * t / 100 + e.gym) + " kcal (everyday " + fmt(ev) + " × " + t + "% + workouts " + fmt(e.gym) + ")"; }
+    else $("wCounted").textContent = w ? "→ counts " + fmt(w * t / 100) + " kcal" : "";
   }
 
   // ---------- profile drawer ----------
@@ -897,7 +919,24 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   // ---------- steps check ----------
   // net extra kcal per kg per hour on top of what steps already count
   const GYM = { bike: 5.8, elliptical: 4.0, treadmill: 1.5, running: 4.0, weights: 2.5, swimming: 5.0 };
-  let watchFilledKey = null, watchDirty = false, gymRows = [{ type: "bike", min: "" }];
+  let watchFilledKey = null, watchDirty = false, gymRows = [{ type: "bike", min: "", hr: "", band: "" }];
+  const CADENCE = { treadmill: 110, running: 160 }; // steps per minute that your step count already covers
+  // Heart-rate calories (Keytel et al. 2005), minus what you'd burn resting anyway.
+  function workoutCalc(r) {
+    const w = Number(profile.weight) || 80, age = Number(profile.age) || 30;
+    const min = Number(r.min) || 0, hr = Number(r.hr) || 0, band = Number(r.band) || 0;
+    const met = (GYM[r.type] || 0) * w * min / 60;
+    let hrEst = 0;
+    if (hr >= 80 && hr <= 220 && min > 0) {
+      const perMin = profile.sex === "f"
+        ? (-20.4022 + 0.4472 * hr - 0.1263 * w + 0.074 * age) / 4.184
+        : (-55.0969 + 0.6309 * hr + 0.1988 * w + 0.2017 * age) / 4.184;
+      hrEst = Math.max(0, (perMin - bmr(profile) / 1440) * min);
+      if (CADENCE[r.type]) hrEst = Math.max(0, hrEst - CADENCE[r.type] * min * 0.00045 * w);
+    }
+    const useHr = hrEst > 0 && r.type !== "weights";
+    return { min, hr, band, met, hrEst, counted: Math.round(useHr ? hrEst : met), useHr };
+  }
   const dayTypeVal = () => Number(document.querySelector('#dayTypeSeg button[aria-pressed="true"]')?.dataset.v || 150);
   function setDayType(v) { document.querySelectorAll("#dayTypeSeg button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.v) === Number(v)))); }
   function fillWatch(k, d) {
@@ -908,7 +947,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     setDayType(d?.dayType ?? profile.lastDayType ?? 150);
     const g = Array.isArray(d?.gym) ? d.gym : d?.gym ? [d.gym] : [];
     $("wGym").checked = g.length > 0;
-    gymRows = g.length ? g.map((x) => ({ type: x.type || "bike", min: x.min || "" })) : [{ type: profile.lastGymType || "bike", min: "" }];
+    gymRows = g.length ? g.map((x) => ({ type: x.type || "bike", min: x.min || "", hr: x.hr || "", band: x.band || "" })) : [{ type: profile.lastGymType || "bike", min: "", hr: "", band: "" }];
     renderGymRows();
     updateEst();
   }
@@ -917,8 +956,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const w = Number(profile.weight) || 80;
     const walk = steps * 0.00045 * w;
     const dayK = dayTypeVal();
-    const gym = $("wGym").checked ? gymRows.reduce((s, r) => s + (GYM[r.type] || 0) * w * (Number(r.min) || 0) / 60, 0) : 0;
-    return { steps, walk, dayK, gym, total: walk + dayK + gym };
+    const on = $("wGym").checked; const rows = on ? gymRows.filter((r) => Number(r.min) > 0) : [];
+    const gym = rows.reduce((s, r) => s + workoutCalc(r).counted, 0);
+    const split = rows.length > 0 && rows.every((r) => Number(r.band) > 0);
+    const bandW = split ? rows.reduce((s, r) => s + Number(r.band), 0) : 0;
+    return { steps, walk, dayK, gym, total: walk + dayK + gym, split, bandW };
   }
   function updateEst() {
     $("gymRow").hidden = !$("wGym").checked;
@@ -935,14 +977,16 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const band = Number($("wKcal").value) || 0;
     const sug = document.createElement("div"); sug.className = "sug";
     if (band > 0) {
-      const pct = Math.max(30, Math.min(100, Math.round((e.total / band) * 20) * 5));
+      const bandPart = e.split ? Math.max(1, band - e.bandW) : band;
+      const realPart = e.split ? e.walk + e.dayK : e.total;
+      const pct = Math.max(30, Math.min(100, Math.round((realPart / bandPart) * 20) * 5));
       const t = document.createElement("span");
-      t.innerHTML = 'Band says <span class="num"></span> · suggested trust <b class="num"></b>';
-      t.querySelector("span").textContent = fmt(band); t.querySelector("b").textContent = pct + "%";
+      t.innerHTML = (e.split ? 'Band everyday part <span class="num"></span>' : 'Band says <span class="num"></span>') + ' · suggested trust <b class="num"></b>';
+      t.querySelector("span").textContent = fmt(bandPart); t.querySelector("b").textContent = pct + "%";
       const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn btn-ember"; btn.textContent = "Use " + pct + "%";
       btn.onclick = () => { $("wTrust").value = pct; watchDirty = true; updateTrustLabel(); toast("Trust set to " + pct + "%. Tap Save to keep it."); };
       sug.append(t, btn);
-      if (e.total > band * 1.05) { const n = document.createElement("div"); n.className = "brk"; n.textContent = "Your band reads lower than your steps suggest, so 100% is the most it will count."; box.append(sug, n); return; }
+      if (realPart > bandPart * 1.05) { const n = document.createElement("div"); n.className = "brk"; n.textContent = "Your band reads lower than your steps suggest, so 100% is the most it will count."; box.append(sug, n); return; }
     } else {
       const t = document.createElement("span"); t.textContent = "No band reading for this day?";
       const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn btn-ghost"; btn.textContent = "Use this estimate";
@@ -952,28 +996,49 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     box.append(sug);
   }
   ["wKcal", "wSteps", "wTrust"].forEach((id) => $(id).addEventListener("input", () => { watchDirty = true; updateEst(); }));
-  $("wGym").addEventListener("change", () => { watchDirty = true; updateEst(); });
+  $("wGym").addEventListener("change", () => { watchDirty = true; updateEst(); updateTrustLabel(); });
   const GYM_LABELS = { bike: "Bike", elliptical: "Elliptical", treadmill: "Treadmill walk", running: "Running", weights: "Weights", swimming: "Swimming" };
   function renderGymRows() {
     const list = $("gymList"); list.innerHTML = "";
     gymRows.forEach((r, i) => {
-      const row = document.createElement("div"); row.className = "wk";
+      const card = document.createElement("div"); card.className = "wk";
+      const top = document.createElement("div"); top.className = "wk-top";
       const sel = document.createElement("select"); sel.id = "wGymType" + i; sel.setAttribute("aria-label", "Workout " + (i + 1));
       for (const k in GYM_LABELS) { const o = document.createElement("option"); o.value = k; o.textContent = GYM_LABELS[k]; sel.appendChild(o); }
       sel.value = r.type;
-      sel.onchange = () => { r.type = sel.value; watchDirty = true; updateEst(); };
-      const m = document.createElement("input"); m.type = "number"; m.inputMode = "numeric"; m.min = "0"; m.placeholder = "45"; m.id = "wGymMin" + i; m.value = r.min; m.setAttribute("aria-label", "Minutes for workout " + (i + 1));
-      m.oninput = () => { r.min = m.value; watchDirty = true; updateEst(); };
       const x = document.createElement("button"); x.type = "button"; x.className = "x"; x.textContent = "×"; x.setAttribute("aria-label", "Remove workout " + (i + 1));
       x.hidden = gymRows.length < 2;
       x.onclick = () => { gymRows.splice(i, 1); watchDirty = true; renderGymRows(); updateEst(); };
-      row.append(sel, m, x); list.appendChild(row);
+      top.append(sel, x);
+      const nums = document.createElement("div"); nums.className = "wk-nums";
+      const res = document.createElement("div"); res.className = "wk-res";
+      const showRes = () => {
+        const c = workoutCalc(r);
+        if (!c.min) { res.textContent = "Enter the minutes, average heart rate and the band's kcal."; return; }
+        let t = "";
+        if (r.type === "weights") t = "Counting <b>~" + fmt(c.counted) + " kcal</b> from type and minutes (heart rate overstates lifting).";
+        else if (c.useHr) t = "Heart-rate estimate: <b>~" + fmt(c.counted) + " kcal</b>" + (c.band ? " · band said " + fmt(c.band) : "") + ".";
+        else t = "<b>~" + fmt(c.counted) + " kcal</b> from type and minutes. Add the average heart rate for a better number.";
+        if (!c.band) t += " Add the band's kcal so this workout isn't counted twice.";
+        res.innerHTML = t;
+      };
+      const mk = (key, label, ph) => {
+        const lab = document.createElement("label");
+        const inp = document.createElement("input"); inp.type = "number"; inp.inputMode = "numeric"; inp.min = "0"; inp.placeholder = ph;
+        inp.id = "wGym" + key + i; inp.value = r[key] || "";
+        inp.oninput = () => { r[key] = inp.value; watchDirty = true; showRes(); updateEst(); updateTrustLabel(); };
+        lab.append(label, inp); return lab;
+      };
+      nums.append(mk("min", "Minutes", "45"), mk("hr", "Avg heart rate", "140"), mk("band", "Band kcal", "450"));
+      sel.onchange = () => { r.type = sel.value; watchDirty = true; showRes(); updateEst(); };
+      showRes();
+      card.append(top, nums, res); list.appendChild(card);
     });
   }
   $("addWorkout").addEventListener("click", () => {
     const used = gymRows.map((r) => r.type); const next = Object.keys(GYM_LABELS).find((k) => !used.includes(k)) || "bike";
-    gymRows.push({ type: next, min: "" }); watchDirty = true; renderGymRows(); updateEst();
-    const inp = $("wGymMin" + (gymRows.length - 1)); inp && inp.focus();
+    gymRows.push({ type: next, min: "", hr: "", band: "" }); watchDirty = true; renderGymRows(); updateEst();
+    const inp = $("wGymmin" + (gymRows.length - 1)); inp && inp.focus();
   });
   document.querySelectorAll("#dayTypeSeg button").forEach((b) => b.addEventListener("click", () => { setDayType(b.dataset.v); watchDirty = true; updateEst(); }));
 
@@ -982,7 +1047,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     d.watch = v > 0 ? v : null; d.trust = Number($("wTrust").value);
     const st = Number($("wSteps").value); d.steps = st > 0 ? st : null;
     d.dayType = dayTypeVal();
-    const wk = gymRows.filter((r) => Number(r.min) > 0).map((r) => ({ type: r.type, min: Number(r.min) }));
+    const wk = gymRows.filter((r) => Number(r.min) > 0).map((r) => ({ type: r.type, min: Number(r.min), hr: Number(r.hr) || null, band: Number(r.band) || null, kcal: workoutCalc(r).counted }));
     d.gym = $("wGym").checked && wk.length ? wk : null;
     if (profile.lastDayType !== d.dayType || (d.gym && profile.lastGymType !== d.gym[0].type)) { profile.lastDayType = d.dayType; if (d.gym) profile.lastGymType = d.gym[0].type; persistProfile(); }
     watchDirty = false;
