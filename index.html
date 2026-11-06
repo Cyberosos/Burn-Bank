@@ -613,7 +613,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v26</div>
+  <div class="ver" data-tabs="history">Burn Bank v27</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -932,10 +932,11 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         ? (-20.4022 + 0.4472 * hr - 0.1263 * w + 0.074 * age) / 4.184
         : (-55.0969 + 0.6309 * hr + 0.1988 * w + 0.2017 * age) / 4.184;
       hrEst = Math.max(0, (perMin - bmr(profile) / 1440) * min);
-      if (CADENCE[r.type]) hrEst = Math.max(0, hrEst - CADENCE[r.type] * min * 0.00045 * w);
     }
     const useHr = hrEst > 0 && r.type !== "weights";
-    return { min, hr, band, met, hrEst, counted: Math.round(useHr ? hrEst : met), useHr };
+    // Walking/running workouts: the full workout counts here; the steps it covers are taken out of the steps estimate instead.
+    const stepsCovered = useHr && CADENCE[r.type] ? CADENCE[r.type] * min : 0;
+    return { min, hr, band, met, hrEst, counted: Math.round(useHr ? hrEst : met), useHr, stepsCovered };
   }
   const dayTypeVal = () => Number(document.querySelector('#dayTypeSeg button[aria-pressed="true"]')?.dataset.v || 150);
   function setDayType(v) { document.querySelectorAll("#dayTypeSeg button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.v) === Number(v)))); }
@@ -954,9 +955,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function stepsEstimate() {
     const steps = Number($("wSteps").value) || 0;
     const w = Number(profile.weight) || 80;
-    const walk = steps * 0.00045 * w;
     const dayK = dayTypeVal();
     const on = $("wGym").checked; const rows = on ? gymRows.filter((r) => Number(r.min) > 0) : [];
+    const covered = rows.reduce((s, r) => s + workoutCalc(r).stepsCovered, 0);
+    const walk = Math.max(0, steps - covered) * 0.00045 * w;
     const gym = rows.reduce((s, r) => s + workoutCalc(r).counted, 0);
     const split = rows.length > 0 && rows.every((r) => Number(r.band) > 0);
     const bandW = split ? rows.reduce((s, r) => s + Number(r.band), 0) : 0;
