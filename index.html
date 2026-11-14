@@ -251,6 +251,7 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .fedit .row > .field { flex: 1 1 80px; }
 .fedit .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .fedit .btns .btn { padding: 9px 14px; font-size: 16px; }
+.wdate { color: var(--gold); font-weight: 600; }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
@@ -300,7 +301,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <div class="row">
       <div class="field"><label for="pAge">Age</label><input id="pAge" type="number" inputmode="numeric" min="14" max="100"></div>
       <div class="field"><label for="pHeight">Height (cm)</label><input id="pHeight" type="number" inputmode="decimal" min="120" max="230"></div>
-      <div class="field"><label for="pWeight">Weight (kg)</label><input id="pWeight" type="number" inputmode="decimal" step="0.1" min="35" max="300"></div>
+      <div class="field"><label for="pWeight">Weight (kg) <span class="wdate" id="pWeightDate"></span></label><input id="pWeight" type="number" inputmode="decimal" step="0.1" min="35" max="300"></div>
     </div>
     <div class="field"><label for="pActivity">Everyday movement (outside watch workouts)</label>
       <select id="pActivity">
@@ -428,7 +429,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     </form>
     <ul class="foods" id="foodList"></ul>
     <div class="recent" id="recentBox">
-      <div class="recent-head"><h3>Recent foods</h3><span class="hint" id="recentCount"></span></div>
+      <div class="recent-head"><h3>Recent foods</h3><button type="button" class="linkbtn" id="recentToggle" aria-expanded="false" aria-controls="recentList">Show all</button></div>
       <input id="recentSearch" type="search" placeholder="Search your foods" autocomplete="off" aria-label="Search your recent foods">
       <ul class="rlist" id="recentList"></ul>
       <button type="button" class="linkbtn" id="recentMore" hidden>Show more</button>
@@ -643,7 +644,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v29</div>
+  <div class="ver" data-tabs="history">Burn Bank v30</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -885,6 +886,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function fillProfile() {
     document.querySelectorAll("#sexSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === profile.sex)));
     $("pAge").value = profile.age; $("pHeight").value = profile.height; $("pWeight").value = profile.weight;
+    $("pWeightDate").textContent = profile.weightDate ? "· entered " + parseKey(profile.weightDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
     $("pActivity").value = String(profile.activity); $("pOverride").value = profile.override ?? "";
     $("pTrust").value = profile.trust; $("pTrustVal").textContent = profile.trust + "%";
     $("pHandLen").value = profile.handLen ?? ""; $("pPalmW").value = profile.palmW ?? ""; $("pFingerLen").value = profile.fingerLen ?? "";
@@ -913,7 +915,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   ["pAge", "pHeight", "pWeight", "pActivity", "pOverride"].forEach((id) => $(id).addEventListener("input", calcPreview));
   $("pTrust").addEventListener("input", () => ($("pTrustVal").textContent = $("pTrust").value + "%"));
   $("saveProfile").addEventListener("click", () => {
+    const prevWeight = Number(profile.weight);
     profile = { ...draftProfile(), isExample: false };
+    if (Number(profile.weight) !== prevWeight || !profile.weightDate) profile.weightDate = today();
     if (days[today()]) days[today()].baseline = currentBase(profile);
     persistProfile(); if (days[today()]) persistDay(today(), false);
     $("drawer").hidden = true; toast("Profile saved — baseline " + fmt(currentBase(profile)) + " kcal/day"); render(); checkKilos();
@@ -966,12 +970,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     return starts.concat(has);
   }
   const foodMeta = (f) => (f.grams ? fmt(f.grams) + " g · " : "") + fmt(f.kcal) + " kcal";
-  let recentShown = 8;
+  let recentShown = 8, recentOpen = false;
   function renderRecent() {
     const all = recentFoods(); const ul = $("recentList"); ul.innerHTML = "";
     $("recentBox").hidden = all.length === 0;
-    $("recentCount").textContent = all.length ? all.length + " foods" : "";
-    const found = matchFoods(all, $("recentSearch").value);
+    const q = $("recentSearch").value.trim();
+    // Collapsed by default: the list only shows while you search, or after tapping "Show all".
+    const open = recentOpen || q.length > 0;
+    $("recentToggle").textContent = recentOpen ? "Hide" : "Show all (" + all.length + ")";
+    $("recentToggle").setAttribute("aria-expanded", String(recentOpen));
+    $("recentToggle").hidden = q.length > 0;
+    ul.hidden = !open;
+    if (!open) { $("recentMore").hidden = true; return; }
+    const found = matchFoods(all, q);
     if (!found.length) { ul.innerHTML = '<li class="empty">No match. Type it above to add it.</li>'; $("recentMore").hidden = true; return; }
     found.slice(0, recentShown).forEach((f) => {
       const li = document.createElement("li");
@@ -991,6 +1002,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   }
   $("recentSearch").addEventListener("input", () => { recentShown = 8; renderRecent(); });
   $("recentMore").addEventListener("click", () => { recentShown += 12; renderRecent(); });
+  $("recentToggle").addEventListener("click", () => { recentOpen = !recentOpen; recentShown = 8; renderRecent(); });
 
   // ---------- suggestions while typing ----------
   let pickedPer = 0, kcalTyped = false, pickedName = "";
