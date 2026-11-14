@@ -100,7 +100,7 @@ button { cursor: pointer; }
 .panel h2 { font-size: 22px; font-weight: 700; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field label { font-size: 13px; color: var(--muted); font-weight: 500; }
-input[type=number], input[type=text], select {
+input[type=number], input[type=text], input[type=search], select {
   width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; min-width: 0; }
 input:focus, select:focus { border-color: var(--gold); outline: none; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -229,6 +229,28 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .fatseg button { padding: 6px 8px; font-size: 13px; }
 .learnbox { gap: 8px; cursor: pointer; color: var(--fg); }
 .learnbox input { width: 18px; height: 18px; accent-color: var(--gold); }
+.sugwrap { position: relative; }
+.suggest { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 15; background: var(--surface-2); border: 1px solid var(--gold); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 24px rgba(0,0,0,.45); }
+.suggest button, .rlist button.ritem { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--line); padding: 11px 12px; font-size: 15px; }
+.suggest button:last-child { border-bottom: none; }
+.suggest button:focus-visible, .suggest button:hover { background: var(--surface); }
+.suggest .meta, .rlist .meta { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.suggest .nm, .rlist .nm { min-width: 0; overflow-wrap: anywhere; }
+.recent { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.recent-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.recent h3 { font-family: var(--font-display); text-transform: uppercase; font-size: 18px; margin: 0; letter-spacing: .03em; }
+.rlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.rlist li { display: flex; align-items: center; gap: 8px; border-bottom: 1px dashed var(--line); }
+.rlist li:last-child { border-bottom: none; }
+.rlist button.ritem { border: none; padding: 10px 0; flex: 1; min-width: 0; }
+.rlist .radd { width: 38px; height: 38px; border: none; border-radius: 10px; background: var(--ice); color: #04202a; font-size: 20px; font-weight: 700; flex: none; touch-action: manipulation; }
+.foods li .in { white-space: nowrap; }
+.foods .fname { background: none; border: none; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.foods .fname .pen { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.fedit { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 4px 0; }
+.fedit .row > .field { flex: 1 1 80px; }
+.fedit .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.fedit .btns .btn { padding: 9px 14px; font-size: 16px; }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
@@ -398,13 +420,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   <section class="panel" aria-label="Food" data-tabs="food">
     <h2>Food in</h2>
     <form id="foodForm" class="row" autocomplete="off">
-      <div class="field" style="flex:1 1 100%"><label for="fName">Food</label><input id="fName" type="text" placeholder="e.g. Koshari, or grilled chicken breast"></div>
+      <div class="field sugwrap" style="flex:1 1 100%"><label for="fName">Food</label><input id="fName" type="text" autocomplete="off" placeholder="e.g. Koshari, or grilled chicken breast" aria-autocomplete="list" aria-controls="fSuggest"><div class="suggest" id="fSuggest" role="listbox" hidden></div></div>
       <div class="field" style="flex:1 1 80px"><label for="fGrams">Grams</label><input id="fGrams" type="number" inputmode="numeric" min="0" placeholder="e.g. 250"></div>
       <div class="field" style="flex:1 1 80px"><label for="fKcal">kcal</label><input id="fKcal" type="number" inputmode="numeric" min="0" placeholder="auto"></div>
       <button class="btn btn-ice" type="submit" id="fAddBtn" style="align-self:flex-end">Add</button>
       <p class="hint" id="fHint" style="margin:0;flex:1 1 100%">Type the food and grams and leave kcal empty. It works out the calories for you.</p>
     </form>
     <ul class="foods" id="foodList"></ul>
+    <div class="recent" id="recentBox">
+      <div class="recent-head"><h3>Recent foods</h3><span class="hint" id="recentCount"></span></div>
+      <input id="recentSearch" type="search" placeholder="Search your foods" autocomplete="off" aria-label="Search your recent foods">
+      <ul class="rlist" id="recentList"></ul>
+      <button type="button" class="linkbtn" id="recentMore" hidden>Show more</button>
+    </div>
 
     <div class="photo-box" id="photoBox" hidden>
       <div class="row">
@@ -615,7 +643,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v28</div>
+  <div class="ver" data-tabs="history">Burn Bank v29</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -817,14 +845,19 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (!d?.foods?.length) ul.innerHTML = '<li class="empty">Nothing logged for this day yet.</li>';
     else d.foods.forEach((f) => {
       const li = document.createElement("li");
-      const nm = document.createElement("span"); nm.className = "fname"; nm.textContent = f.name || "Food";
+      if (editingFoodId === f.id) { li.appendChild(foodEditor(k, d, f)); ul.appendChild(li); return; }
+      const nm = document.createElement("button"); nm.type = "button"; nm.className = "fname"; nm.textContent = f.name || "Food";
+      nm.setAttribute("aria-label", "Edit " + (f.name || "food"));
       if (f.grams) { const sm = document.createElement("small"); sm.textContent = " · ~" + fmt(f.grams) + " g"; nm.appendChild(sm); }
+      const pen = document.createElement("span"); pen.className = "pen"; pen.textContent = "✎ edit"; nm.appendChild(pen);
+      nm.addEventListener("click", () => { editingFoodId = f.id; render(); const i = $("feName"); i && i.focus(); });
       const right = document.createElement("span"); right.style.display = "flex"; right.style.alignItems = "center"; right.style.gap = "6px";
       right.innerHTML = '<span class="in num" style="font-weight:600">' + fmt(f.kcal) + ' kcal</span>';
       const x = document.createElement("button"); x.className = "x"; x.type = "button"; x.setAttribute("aria-label", "Remove " + (f.name || "food")); x.textContent = "×";
       x.addEventListener("click", () => { d.foods = d.foods.filter((g) => g.id !== f.id); persistDay(k); render(); checkKilos(); });
       right.appendChild(x); li.append(nm, right); ul.appendChild(li);
     });
+    renderRecent();
 
     // history
     const h = $("hist"); h.innerHTML = "";
@@ -885,6 +918,110 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     persistProfile(); if (days[today()]) persistDay(today(), false);
     $("drawer").hidden = true; toast("Profile saved — baseline " + fmt(currentBase(profile)) + " kcal/day"); render(); checkKilos();
   });
+
+  // ---------- edit a logged food ----------
+  let editingFoodId = null;
+  function foodEditor(k, d, f) {
+    const box = document.createElement("div"); box.className = "fedit";
+    const per = f.grams ? f.kcal / f.grams : 0;
+    box.innerHTML = '<div class="field"><label for="feName">Food</label><input id="feName" type="text"></div>' +
+      '<div class="row"><div class="field"><label for="feGrams">Grams</label><input id="feGrams" type="number" inputmode="numeric" min="0"></div>' +
+      '<div class="field"><label for="feKcal">kcal</label><input id="feKcal" type="number" inputmode="numeric" min="0"></div></div>' +
+      '<span class="hint" id="feHint"></span>' +
+      '<div class="btns"><button type="button" class="btn btn-ice" id="feSave">Save</button><button type="button" class="btn btn-ghost" id="feCancel">Cancel</button><button type="button" class="btn btn-ghost" id="feDel">Delete</button></div>';
+    const q = (id) => box.querySelector("#" + id);
+    q("feName").value = f.name || ""; q("feGrams").value = f.grams || ""; q("feKcal").value = f.kcal || "";
+    q("feHint").textContent = per ? "Change the grams and the calories follow (" + (per * 100).toFixed(0) + " kcal per 100 g)." : "";
+    q("feGrams").addEventListener("input", () => { const g = Number(q("feGrams").value) || 0; if (per && g) q("feKcal").value = Math.round(per * g); });
+    q("feCancel").onclick = () => { editingFoodId = null; render(); };
+    q("feDel").onclick = () => { d.foods = d.foods.filter((g) => g.id !== f.id); editingFoodId = null; persistDay(k); render(); checkKilos(); toast("Food removed"); };
+    q("feSave").onclick = () => {
+      const kc = Math.round(Number(q("feKcal").value) || 0);
+      if (kc <= 0) { q("feHint").textContent = "Enter the calories (above 0)."; q("feKcal").focus(); return; }
+      f.name = (q("feName").value.trim() || "Food").slice(0, 60); f.kcal = kc;
+      const g = Math.round(Number(q("feGrams").value) || 0); if (g > 0) f.grams = g; else delete f.grams;
+      editingFoodId = null; persistDay(k); render(); checkKilos(); toast("Saved");
+    };
+    return box;
+  }
+
+  // ---------- recent foods (built from everything you've logged) ----------
+  function recentFoods() {
+    const seen = new Map();
+    Object.keys(days).sort().reverse().forEach((key) => {
+      const fs = days[key]?.foods || [];
+      for (let i = fs.length - 1; i >= 0; i--) {
+        const f = fs[i]; const nm = String(f.name || "").trim(); if (!nm || !(f.kcal > 0)) continue;
+        const id = nm.toLowerCase();
+        if (seen.has(id)) { seen.get(id).times++; continue; }
+        seen.set(id, { name: nm, grams: f.grams || 0, kcal: f.kcal, times: 1 });
+      }
+    });
+    return [...seen.values()];
+  }
+  function matchFoods(list, q) {
+    q = q.trim().toLowerCase(); if (!q) return list;
+    const starts = [], has = [];
+    list.forEach((f) => { const n = f.name.toLowerCase(); if (n.startsWith(q) || n.split(/\s+/).some((w) => w.startsWith(q))) starts.push(f); else if (n.includes(q)) has.push(f); });
+    return starts.concat(has);
+  }
+  const foodMeta = (f) => (f.grams ? fmt(f.grams) + " g · " : "") + fmt(f.kcal) + " kcal";
+  let recentShown = 8;
+  function renderRecent() {
+    const all = recentFoods(); const ul = $("recentList"); ul.innerHTML = "";
+    $("recentBox").hidden = all.length === 0;
+    $("recentCount").textContent = all.length ? all.length + " foods" : "";
+    const found = matchFoods(all, $("recentSearch").value);
+    if (!found.length) { ul.innerHTML = '<li class="empty">No match. Type it above to add it.</li>'; $("recentMore").hidden = true; return; }
+    found.slice(0, recentShown).forEach((f) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button"); b.type = "button"; b.className = "ritem";
+      b.innerHTML = '<span class="nm"></span><span class="meta num"></span>';
+      b.querySelector(".nm").textContent = f.name; b.querySelector(".meta").textContent = foodMeta(f);
+      b.setAttribute("aria-label", "Use " + f.name + " in the form");
+      b.onclick = () => { pickFood(f); $("fName").scrollIntoView({ behavior: "smooth", block: "center" }); };
+      const a = document.createElement("button"); a.type = "button"; a.className = "radd"; a.textContent = "+"; a.setAttribute("aria-label", "Add " + f.name + " again");
+      a.onclick = () => {
+        const nf = { id: uid(), name: f.name, kcal: Math.round(f.kcal) }; if (f.grams) nf.grams = f.grams;
+        getDay(viewKey).foods.push(nf); persistDay(viewKey); render(); checkKilos(); toast("Added " + f.name);
+      };
+      li.append(b, a); ul.appendChild(li);
+    });
+    $("recentMore").hidden = found.length <= recentShown;
+  }
+  $("recentSearch").addEventListener("input", () => { recentShown = 8; renderRecent(); });
+  $("recentMore").addEventListener("click", () => { recentShown += 12; renderRecent(); });
+
+  // ---------- suggestions while typing ----------
+  let pickedPer = 0, kcalTyped = false, pickedName = "";
+  function pickFood(f) {
+    $("fName").value = f.name; $("fGrams").value = f.grams || ""; $("fKcal").value = Math.round(f.kcal);
+    pickedPer = f.grams ? f.kcal / f.grams : 0; kcalTyped = false; pickedName = f.name;
+    $("fSuggest").hidden = true;
+    $("fHint").textContent = pickedPer ? "From your history. Change the grams and the calories follow, then tap Add." : "From your history. Tap Add.";
+  }
+  function showSuggest() {
+    const box = $("fSuggest"); const q = $("fName").value;
+    if (q.trim().length < 1) { box.hidden = true; return; }
+    const found = matchFoods(recentFoods(), q).slice(0, 6);
+    if (!found.length) { box.hidden = true; return; }
+    box.innerHTML = "";
+    found.forEach((f) => {
+      const b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "option");
+      b.innerHTML = '<span class="nm"></span><span class="meta num"></span>';
+      b.querySelector(".nm").textContent = f.name; b.querySelector(".meta").textContent = foodMeta(f);
+      b.addEventListener("mousedown", (e) => e.preventDefault());
+      b.onclick = () => pickFood(f);
+      box.appendChild(b);
+    });
+    box.hidden = false;
+  }
+  $("fName").addEventListener("input", () => { pickedPer = 0; showSuggest(); });
+  $("fName").addEventListener("focus", showSuggest);
+  $("fName").addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== $("fName")) $("fSuggest").hidden = true; }, 150));
+  $("fName").addEventListener("keydown", (e) => { if (e.key === "Escape") $("fSuggest").hidden = true; });
+  $("fKcal").addEventListener("input", () => { kcalTyped = true; });
+  $("fGrams").addEventListener("input", () => { const g = Number($("fGrams").value) || 0; if (pickedPer && !kcalTyped && g && $("fName").value === pickedName) $("fKcal").value = Math.round(pickedPer * g); });
 
   // ---------- start over ----------
   $("restartBtn").addEventListener("click", () => { $("restartBox").hidden = false; $("restartYes").focus(); });
