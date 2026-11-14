@@ -227,6 +227,8 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .ledger.off .lrow:not(.total) .v { opacity: .35; text-decoration: line-through; }
 .fatseg { flex: 1 1 180px; padding: 2px; }
 .fatseg button { padding: 6px 8px; font-size: 13px; }
+.learnbox { gap: 8px; cursor: pointer; color: var(--fg); }
+.learnbox input { width: 18px; height: 18px; accent-color: var(--gold); }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
@@ -613,7 +615,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v27</div>
+  <div class="ver" data-tabs="history">Burn Bank v28</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1147,15 +1149,15 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     const head = document.createElement("div"); head.className = "guess hint"; head.innerHTML = "<span>Food</span><span>grams</span><span>kcal</span><span></span>"; g.appendChild(head);
     guesses.forEach((it, i) => {
       const r = document.createElement("div"); r.className = "guess"; r.dataset.row = "1";
-      r.dataset.ai = String(Math.round(it.aiGrams || 0)); r.dataset.ainame = it.name;
+      r.dataset.ai = String(Math.round(it.aiGrams || 0)); r.dataset.ainame = it.name; r.dataset.aikcal = String(Math.round(it.kcal || 0));
       const n = document.createElement("input"); n.type = "text"; n.value = it.name; n.id = "gN" + i; n.addEventListener("input", () => (it.name = n.value));
       const gr = document.createElement("input"); gr.type = "number"; gr.value = Math.round(it.grams || 0); gr.id = "gG" + i;
       const kc = document.createElement("input"); kc.type = "number"; kc.value = Math.round(it.kcal || 0); kc.id = "gK" + i;
       const basePer = it.grams ? it.kcal / it.grams : 0;
       const perNow = () => (it.mode === "lean" && it.perLean) ? it.perLean : (it.mode === "fat" && it.perFat) ? it.perFat : basePer;
       const recalc = () => { const p = perNow(); if (p) { it.kcal = Math.round(p * it.grams); kc.value = it.kcal; } };
-      gr.addEventListener("input", () => { it.grams = Number(gr.value) || 0; recalc(); });
-      kc.addEventListener("input", () => (it.kcal = Number(kc.value) || 0));
+      gr.addEventListener("input", () => { it.grams = Number(gr.value) || 0; recalc(); showLearn(); });
+      kc.addEventListener("input", () => { it.kcal = Number(kc.value) || 0; showLearn(); });
       const x = document.createElement("button"); x.type = "button"; x.className = "plus"; x.textContent = "+";
       x.setAttribute("aria-label", "Add " + it.name);
       x.onclick = () => addRows([r]);
@@ -1182,6 +1184,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         wi.addEventListener("input", () => { const v = Number(wi.value) || 0; if (!v) return; it.grams = Math.round(v * ratio); gr.value = it.grams; recalc(); });
         sub.append(info, lab, wi); r.appendChild(sub);
       }
+      // Changing grams or kcal only teaches the AI when you tick this box (off by default).
+      const learn = document.createElement("label"); learn.className = "gsub learnbox"; learn.hidden = true;
+      const lc = document.createElement("input"); lc.type = "checkbox"; lc.id = "gL" + i;
+      learn.append(lc, " Remember this as a correction for next time");
+      r.appendChild(learn);
+      function showLearn() { learn.hidden = false; }
       g.appendChild(r);
     });
     $("addGuesses").hidden = false;
@@ -1326,7 +1334,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     if (sidePhoto) parts.push("There are TWO photos of the same meal. Photo 1 is the main view from above, usually taken straight down, so use it for length and width. Photo 2 is a SIDE VIEW taken at table height. In photo 2 the user's hand stands on its little-finger edge on the table, palm facing the camera, fingers pointing at the food: the hand is " + p.handLen + " cm long from wrist crease to middle fingertip, and the palm is " + p.palmW + " cm tall from the table to the top of the palm (excluding the thumb). Use photo 2 to measure the real height or thickness of each food (sandwich thickness, how high food is piled, how deep the bowl is filled), and combine it with the length and width from photo 1 to estimate volume.");
     if (notes) parts.push("The user's notes about this meal, which you should trust over what you see: \"" + notes + "\". Add any extras they mention (oil, butter, ghee, tahini, mayo, sugar, sauces, cheese) as separate items with their own grams and kcal. If they say fried, use fried-food calorie values. If they say half eaten, count only what was eaten. If they say restaurant, assume more generous oil and portions.");
     const corr = (p.corrections || []).slice(-15);
-    if (corr.length) parts.push("This user corrected your earlier portion guesses. Use these to calibrate how you judge sizes, especially for the same dishes: " + corr.map((c) => c.name + ": you guessed " + c.ai + " g, real was " + c.grams + " g").join("; ") + ".");
+    if (corr.length) parts.push("This user corrected your earlier portion guesses. Use these to calibrate how you judge sizes, especially for the same dishes: " + corr.map((c) => c.name + ": you guessed " + c.ai + " g, real was " + c.grams + " g" + (c.aiKcal && c.kcal && c.aiKcal !== c.kcal ? " (you said " + c.aiKcal + " kcal, real was " + c.kcal + " kcal)" : "")).join("; ") + ".");
     parts.push("Foods with parts nobody eats (whole fish with head and bones, chicken or meat on the bone, shrimp in shells, fruit with peel or pits): give \"grams\" and \"kcal\" for the EDIBLE part only, and also give \"whole_grams\" for the total weight as served including bones, head, shell or peel. A whole grilled or fried fish is typically only 40–55% edible flesh. For other foods leave out whole_grams.");
     parts.push("Combine all pieces of the same food into ONE item with the total grams (four pieces of beef = one \"Beef steak\" item). Never list the same food twice. For meat, use COOKED values because the photo shows cooked food: lean beef about 200 kcal per 100 g, beef with its fat on about 270, lamb with fat about 290, lamb lean about 210, chicken with skin about 220, chicken breast without skin about 165. For any red meat or chicken that has visible fat or skin, give \"grams\" as the total cooked meat weight (without bones) and also give both \"kcal_with_fat\" (eaten with its fat or skin) and \"kcal_lean\" (fat or skin cut off and not eaten), and set \"kcal\" to kcal_with_fat. Bones are never eaten. Pan-fried meat carries some cooking fat, so add oil or ghee as an item only if the user mentions it.");
     parts.push("For calories use standard values per gram for the food as typically prepared. Return ONLY a JSON array like [{\"name\":\"Beef steak\",\"grams\":350,\"kcal\":945,\"kcal_with_fat\":945,\"kcal_lean\":700,\"hand_found\":true},{\"name\":\"Grilled tilapia\",\"grams\":260,\"kcal\":360,\"whole_grams\":540,\"hand_found\":true},{\"name\":\"Ful medames\",\"grams\":300,\"kcal\":330,\"hand_found\":true}]. If there is no food, return [].");
@@ -1341,15 +1349,17 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   function learnFrom(rowEls) {
     let changed = false;
     rowEls.forEach((r) => {
-      const ai = Number(r.dataset.ai) || 0; const g = parseFloat(r.querySelectorAll("input")[1].value) || 0;
-      if (ai > 0 && g > 0 && Math.abs(g - ai) / ai >= 0.15) {
+      if (!r.querySelector(".learnbox input")?.checked) return; // only when you ask it to remember
+      const ai = Number(r.dataset.ai) || 0, aiK = Number(r.dataset.aikcal) || 0;
+      const g = parseFloat(r.querySelectorAll("input")[1].value) || 0, k = parseFloat(r.querySelectorAll("input")[2].value) || 0;
+      if ((ai > 0 && g > 0 && g !== ai) || (aiK > 0 && k > 0 && k !== aiK)) {
         const name = (r.querySelector("input").value.trim() || r.dataset.ainame || "Food").slice(0, 60);
         const list = (profile.corrections || []).filter((c) => c.name.toLowerCase() !== name.toLowerCase());
-        list.push({ name, ai: Math.round(ai), grams: Math.round(g) });
+        list.push({ name, ai: Math.round(ai), grams: Math.round(g), aiKcal: Math.round(aiK), kcal: Math.round(k) });
         profile.corrections = list.slice(-30); changed = true;
       }
     });
-    if (changed) { persistProfile(); toast("Got it, I'll remember that portion size"); }
+    if (changed) { persistProfile(); toast("Got it, I'll remember that for next time"); }
   }
   $("addGuesses").onclick = () => addRows([...document.querySelectorAll("#guesses [data-row]")]);
   function addRows(rowEls) {
