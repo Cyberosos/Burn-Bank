@@ -255,6 +255,26 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
+/* weight log */
+.wlog { display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.wlog-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wlog-head b { font-family: var(--font-display); text-transform: uppercase; font-size: 17px; letter-spacing: .03em; }
+.wlog-sum { font-size: 13px; color: var(--good); font-weight: 600; }
+.wl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.wl-list > li { border-bottom: 1px dashed var(--line); }
+.wl-list > li:last-child { border-bottom: none; }
+.wl-main { display: grid; grid-template-columns: minmax(0,1fr) auto 58px; gap: 10px; align-items: baseline; width: 100%; background: none; border: none; padding: 10px 0; text-align: left; font-size: 15px; }
+.wl-d { color: var(--muted); }
+.wl-kg { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+.wl-ch { font-size: 13px; font-weight: 600; text-align: right; }
+.wl-ch.flat { color: var(--muted); }
+.wl-edit { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
+.wl-edit input[type=date] { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; color-scheme: dark; }
+.wl-edit input[type=number] { background: var(--surface); }
+.wl-edit .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.wl-edit .btns .btn { padding: 9px 14px; font-size: 16px; }
+.wlog-foot { display: flex; justify-content: space-between; gap: 10px; }
+
 /* celebration */
 .celebrate { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(10,6,4,.82); padding: 24px; }
 .celebrate canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -302,6 +322,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       <div class="field"><label for="pAge">Age</label><input id="pAge" type="number" inputmode="numeric" min="14" max="100"></div>
       <div class="field"><label for="pHeight">Height (cm)</label><input id="pHeight" type="number" inputmode="decimal" min="120" max="230"></div>
       <div class="field"><label for="pWeight">Weight (kg) <span class="wdate" id="pWeightDate"></span></label><input id="pWeight" type="number" inputmode="decimal" step="0.1" min="35" max="300"></div>
+    </div>
+    <div class="wlog" id="wLog">
+      <div class="wlog-head"><b>Weight log</b><span class="wlog-sum num" id="wlSum"></span></div>
+      <ul class="wl-list" id="wlList"></ul>
+      <div class="wlog-foot"><button type="button" class="linkbtn" id="wlAdd">+ Add a weigh-in</button><button type="button" class="linkbtn" id="wlMore" hidden>Show all</button></div>
+      <span class="hint">Tap a weigh-in to change its date or weight. Your newest one is used for your daily burn.</span>
     </div>
     <div class="field"><label for="pActivity">Everyday movement (outside watch workouts)</label>
       <select id="pActivity">
@@ -644,7 +670,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v30</div>
+  <div class="ver" data-tabs="history">Burn Bank v31</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -891,6 +917,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     $("pTrust").value = profile.trust; $("pTrustVal").textContent = profile.trust + "%";
     $("pHandLen").value = profile.handLen ?? ""; $("pPalmW").value = profile.palmW ?? ""; $("pFingerLen").value = profile.fingerLen ?? "";
     renderLearned();
+    seedWeightLog(); wlEditing = null; wlAll = false; renderWeightLog();
     calcPreview();
   }
   function draftProfile() {
@@ -917,11 +944,83 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   $("saveProfile").addEventListener("click", () => {
     const prevWeight = Number(profile.weight);
     profile = { ...draftProfile(), isExample: false };
-    if (Number(profile.weight) !== prevWeight || !profile.weightDate) profile.weightDate = today();
+    const wChanged = Number(profile.weight) !== prevWeight;
+    if (!wChanged) seedWeightLog();
+    if (wChanged || !wlog().length) upsertWeight(today(), Math.round(Number(profile.weight) * 10) / 10);
+    { const s = wlSorted(); if (s.length) { profile.weight = s[0].kg; profile.weightDate = s[0].date; } }
     if (days[today()]) days[today()].baseline = currentBase(profile);
     persistProfile(); if (days[today()]) persistDay(today(), false);
     $("drawer").hidden = true; toast("Profile saved — baseline " + fmt(currentBase(profile)) + " kcal/day"); render(); checkKilos();
   });
+
+  // ---------- weight log ----------
+  let wlEditing = null, wlAll = false;
+  const wlog = () => { if (!Array.isArray(profile.weightLog)) profile.weightLog = []; return profile.weightLog; };
+  const wlSorted = () => [...wlog()].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const fmtDay = (k) => parseKey(k).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  function seedWeightLog() { if (!wlog().length && !profile.isExample && Number(profile.weight) > 0) wlog().push({ id: uid(), date: profile.weightDate || today(), kg: Number(profile.weight) }); }
+  function upsertWeight(date, kg, id) {
+    const log = wlog();
+    const clash = log.find((x) => x.date === date && x.id !== id);
+    if (id) { const e = log.find((x) => x.id === id); if (e) { e.date = date; e.kg = kg; } if (clash) profile.weightLog = log.filter((x) => x !== clash); }
+    else if (clash) clash.kg = kg;
+    else log.push({ id: uid(), date, kg });
+  }
+  function syncLatestWeight() {
+    const s = wlSorted();
+    if (s.length) { profile.weight = s[0].kg; profile.weightDate = s[0].date; }
+    if (days[today()]) days[today()].baseline = currentBase(profile);
+    persistProfile(); if (days[today()]) persistDay(today(), false);
+    $("pWeight").value = profile.weight;
+    $("pWeightDate").textContent = profile.weightDate ? "· entered " + fmtDay(profile.weightDate) : "";
+    calcPreview(); renderWeightLog(); render(); checkKilos();
+  }
+  function renderWeightLog() {
+    const ul = $("wlList"); ul.innerHTML = "";
+    const s = wlSorted();
+    if (s.length > 1) { const first = s[s.length - 1], d = s[0].kg - first.kg; $("wlSum").textContent = (d < 0 ? "Down " : d > 0 ? "Up " : "Same ") + (d ? Math.abs(d).toFixed(1) + " kg " : "") + "since " + parseKey(first.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }); $("wlSum").style.color = d > 0 ? "var(--ember)" : ""; }
+    else $("wlSum").textContent = "";
+    if (wlEditing === "new") ul.appendChild(wlEditor(null));
+    if (!s.length && wlEditing !== "new") ul.innerHTML = '<li class="empty">No weigh-ins yet. Save your weight and it shows up here.</li>';
+    (wlAll ? s : s.slice(0, 5)).forEach((e) => {
+      if (wlEditing === e.id) { ul.appendChild(wlEditor(e)); return; }
+      const prev = s[s.indexOf(e) + 1];
+      const li = document.createElement("li");
+      const b = document.createElement("button"); b.type = "button"; b.className = "wl-main num";
+      b.setAttribute("aria-label", "Edit weigh-in on " + fmtDay(e.date));
+      b.innerHTML = '<span class="wl-d"></span><span class="wl-kg"></span><span class="wl-ch"></span>';
+      b.querySelector(".wl-d").textContent = fmtDay(e.date) + " ✎";
+      b.querySelector(".wl-kg").textContent = Number(e.kg).toFixed(1) + " kg";
+      const c = b.querySelector(".wl-ch");
+      if (prev) { const ch = Math.round((e.kg - prev.kg) * 10) / 10; c.textContent = ch > 0 ? "+" + ch.toFixed(1) : ch < 0 ? "−" + Math.abs(ch).toFixed(1) : "±0"; c.classList.add(ch < 0 ? "pos" : ch > 0 ? "neg" : "flat"); }
+      else { c.textContent = "first"; c.classList.add("flat"); }
+      b.onclick = () => { wlEditing = e.id; renderWeightLog(); const i = $("wlKg"); i && i.focus(); };
+      li.appendChild(b); ul.appendChild(li);
+    });
+    $("wlMore").hidden = s.length <= 5;
+    $("wlMore").textContent = wlAll ? "Show less" : "Show all (" + s.length + ")";
+    $("wlAdd").hidden = wlEditing === "new";
+  }
+  function wlEditor(e) {
+    const li = document.createElement("li"); li.className = "wl-edit";
+    li.innerHTML = '<div class="row"><div class="field"><label for="wlDate">Date</label><input id="wlDate" type="date"></div><div class="field"><label for="wlKg">Weight (kg)</label><input id="wlKg" type="number" inputmode="decimal" step="0.1" min="35" max="300"></div></div><span class="hint" id="wlHint"></span><div class="btns"><button type="button" class="btn btn-ember" id="wlSave">Save</button><button type="button" class="btn btn-ghost" id="wlCancel">Cancel</button>' + (e ? '<button type="button" class="btn btn-ghost" id="wlDel">Delete</button>' : "") + "</div>";
+    const q = (id) => li.querySelector("#" + id);
+    q("wlDate").max = today(); q("wlDate").value = e ? e.date : today();
+    q("wlKg").value = e ? e.kg : (profile.weight || "");
+    q("wlCancel").onclick = () => { wlEditing = null; renderWeightLog(); };
+    if (e) q("wlDel").onclick = () => { profile.weightLog = wlog().filter((x) => x.id !== e.id); wlEditing = null; syncLatestWeight(); toast("Weigh-in deleted"); };
+    q("wlSave").onclick = () => {
+      const date = q("wlDate").value; const kg = Math.round(Number(q("wlKg").value) * 10) / 10;
+      if (!date || date > today()) { q("wlHint").textContent = "Pick a date up to today."; return; }
+      if (!(kg >= 35 && kg <= 300)) { q("wlHint").textContent = "Enter a weight between 35 and 300 kg."; q("wlKg").focus(); return; }
+      const merged = wlog().some((x) => x.date === date && x.id !== e?.id);
+      upsertWeight(date, kg, e?.id); wlEditing = null; syncLatestWeight();
+      toast(merged ? "That day already had a weigh-in, so it was updated" : "Weigh-in saved");
+    };
+    return li;
+  }
+  $("wlAdd").addEventListener("click", () => { wlEditing = "new"; renderWeightLog(); const i = $("wlKg"); i && i.focus(); });
+  $("wlMore").addEventListener("click", () => { wlAll = !wlAll; renderWeightLog(); });
 
   // ---------- edit a logged food ----------
   let editingFoodId = null;
