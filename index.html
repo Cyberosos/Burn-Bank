@@ -1721,6 +1721,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   });
 
   // ---------- backup & restore ----------
+  if (window.claude?.use) $("bkDownload").hidden = true; // downloads are blocked inside Claude; use Copy there
   function backupText() {
     return JSON.stringify({ app: "burn-bank", format: 1, exported: new Date().toISOString(), from: location.host || "claude", profile, days });
   }
