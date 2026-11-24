@@ -252,6 +252,8 @@ textarea:focus { border-color: var(--gold); outline: none; }
 .fedit .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .fedit .btns .btn { padding: 9px 14px; font-size: 16px; }
 .wdate { color: var(--gold); font-weight: 600; }
+.bk-restore label.pick { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px; font-weight: 600; cursor: pointer; }
+.bk-restore { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
 .countday { padding: 10px 0 12px; font-size: 14px; border-top: 1px solid var(--line); }
 .banner { padding: 12px; border-radius: 12px; background: rgba(62,210,255,.1); border: 1px solid rgba(62,210,255,.3); font-size: 14px; }
 
@@ -670,7 +672,33 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     <p class="hint" style="margin:0">Tap a day to open it. Only days with food logged count toward the bank, so a forgotten day doesn't fake a big deficit.</p>
     <button type="button" class="btn btn-ghost" id="histProfile">Profile &amp; settings</button>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v31</div>
+
+  <section class="panel" aria-label="Backup and restore" data-tabs="history">
+    <h2>Backup &amp; restore</h2>
+    <p class="hint" style="margin:0" id="bkInfo">Your data lives only on this phone, for this web address. Make a backup before changing phones, browsers or the app's address.</p>
+    <div class="row">
+      <button type="button" class="btn btn-ice" id="bkDownload" style="flex:1 1 150px">Download backup</button>
+      <button type="button" class="btn btn-ghost" id="bkCopy" style="flex:1 1 150px">Copy backup text</button>
+    </div>
+    <textarea id="bkOut" readonly hidden aria-label="Backup text" style="min-height:90px;font-size:12px"></textarea>
+    <div class="bk-restore">
+      <b>Restore</b>
+      <label class="pick" for="bkFile">📂 Restore from a backup file</label>
+      <input type="file" id="bkFile" accept=".json,application/json,text/plain" hidden>
+      <textarea id="bkText" placeholder="…or paste backup text here" aria-label="Paste backup text"></textarea>
+      <button type="button" class="btn btn-ghost" id="bkPaste">Restore from pasted text</button>
+    </div>
+    <div class="restore-box" id="bkConfirm" hidden>
+      <b id="bkSummary"></b>
+      <span>Merge keeps what's already on this phone and adds the backup. Replace wipes this phone's data and uses the backup only.</span>
+      <div class="row">
+        <button type="button" class="btn btn-ember" id="bkMerge" style="flex:1">Merge</button>
+        <button type="button" class="btn btn-ghost" id="bkReplace" style="flex:1">Replace</button>
+        <button type="button" class="btn btn-ghost" id="bkCancel">Cancel</button>
+      </div>
+    </div>
+  </section>
+  <div class="ver" data-tabs="history">Burn Bank v32</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1691,6 +1719,72 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       st.textContent = e?.code === "not_granted" ? "Wrong passcode, or this website isn't allowed in the Worker" : "Couldn't reach the Worker. Check the address.";
     }
   });
+
+  // ---------- backup & restore ----------
+  function backupText() {
+    return JSON.stringify({ app: "burn-bank", format: 1, exported: new Date().toISOString(), from: location.host || "claude", profile, days });
+  }
+  $("bkDownload").addEventListener("click", () => {
+    const txt = backupText();
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" }));
+      a.download = "burn-bank-backup-" + today() + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast("Backup downloaded. Check your Downloads folder.");
+    } catch (e) { $("bkOut").hidden = false; $("bkOut").value = txt; toast("Download blocked here. Use Copy backup text instead."); }
+  });
+  $("bkCopy").addEventListener("click", () => {
+    const txt = backupText(); const out = $("bkOut");
+    out.hidden = false; out.value = txt;
+    const fallback = () => { out.focus(); out.select(); toast("Text selected. Press and hold, then Copy."); };
+    try { navigator.clipboard.writeText(txt).then(() => toast("Backup copied. Paste it into the new app's Restore box."), fallback); } catch (e) { fallback(); }
+  });
+  let pendingBackup = null;
+  function readBackup(txt) {
+    let b; try { b = JSON.parse(String(txt).trim()); } catch (e) { toast("That isn't a Burn Bank backup."); return; }
+    if (!b || b.app !== "burn-bank" || typeof b.days !== "object" || !b.profile) { toast("That isn't a Burn Bank backup."); return; }
+    pendingBackup = b;
+    const n = Object.keys(b.days).filter((k) => b.days[k]?.foods?.length).length;
+    $("bkSummary").textContent = "Backup from " + new Date(b.exported).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " · " + n + " days with food";
+    $("bkConfirm").hidden = false; $("bkMerge").focus();
+  }
+  $("bkFile").addEventListener("change", () => {
+    const f = $("bkFile").files[0]; $("bkFile").value = ""; if (!f) return;
+    const r = new FileReader(); r.onload = () => readBackup(r.result); r.readAsText(f);
+  });
+  $("bkPaste").addEventListener("click", () => { if ($("bkText").value.trim()) readBackup($("bkText").value); else $("bkText").focus(); });
+  $("bkCancel").addEventListener("click", () => { pendingBackup = null; $("bkConfirm").hidden = true; });
+  function applyBackup(mode) {
+    const b = pendingBackup; if (!b) return;
+    const copy = (x) => JSON.parse(JSON.stringify(x));
+    if (mode === "replace") { profile = { ...defaultProfile, ...copy(b.profile) }; days = copy(b.days); }
+    else {
+      if (profile.isExample) profile = { ...defaultProfile, ...copy(b.profile) };
+      else {
+        const byDate = new Map(); [...(b.profile.weightLog || []), ...(profile.weightLog || [])].forEach((w) => w && w.date && byDate.set(w.date, w));
+        if (byDate.size) profile.weightLog = [...byDate.values()];
+        profile.corrections = [...(b.profile.corrections || []), ...(profile.corrections || [])].slice(-30);
+        profile.nameFixes = [...(b.profile.nameFixes || []), ...(profile.nameFixes || [])].slice(-20);
+      }
+      for (const k in b.days) {
+        const bd = copy(b.days[k]), cur = days[k];
+        if (!cur) { days[k] = bd; continue; }
+        const ids = new Set((cur.foods || []).map((f) => f.id));
+        cur.foods = [...(cur.foods || []), ...(bd.foods || []).filter((f) => !ids.has(f.id))];
+        for (const key in bd) if (cur[key] == null || cur[key] === "") cur[key] = bd[key];
+      }
+    }
+    profile.lastKilos = Math.max(0, Math.floor(bank() / KCAL_PER_KG)); // no fake celebration
+    saveLocal();
+    if (backend) { backend.saveProfile(profile).catch(() => {}); for (const k in days) backend.saveDay(k, days[k]).catch(() => {}); }
+    pendingBackup = null; $("bkConfirm").hidden = true; $("bkText").value = "";
+    watchFilledKey = null; render();
+    toast(mode === "replace" ? "Backup restored" : "Backup merged");
+  }
+  $("bkMerge").addEventListener("click", () => applyBackup("merge"));
+  $("bkReplace").addEventListener("click", () => applyBackup("replace"));
 
   // ---------- tabs ----------
   const TABS = ["today", "food", "burn", "history"];
