@@ -433,7 +433,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         <button type="button" data-v="250" aria-pressed="false">Busy, on my feet</button>
       </div>
     </div>
-    <label class="check"><input type="checkbox" id="wGym"> I went to the gym</label>
+    <label class="check"><input type="checkbox" id="wGym"> I did a workout or walk</label>
     <div class="panel" id="gymRow" hidden style="gap:8px">
       <div id="gymList" class="panel" style="gap:8px"></div>
       <button type="button" class="btn btn-ghost" id="addWorkout">+ Add another workout</button>
@@ -698,7 +698,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       </div>
     </div>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v33</div>
+  <div class="ver" data-tabs="history">Burn Bank v34</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1252,7 +1252,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     top.innerHTML = 'Realistic burn from your steps: <span class="big num"></span>';
     top.querySelector(".big").textContent = "~" + fmt(e.total) + " kcal";
     const brk = document.createElement("div"); brk.className = "brk num";
-    brk.textContent = "walking " + fmt(e.walk) + " + day " + fmt(e.dayK) + (e.gym ? " + gym " + fmt(e.gym) : "");
+    brk.textContent = "walking " + fmt(e.walk) + " + day " + fmt(e.dayK) + (e.gym ? " + workouts " + fmt(e.gym) : "");
     box.append(top, brk);
     const band = Number($("wKcal").value) || 0;
     const sug = document.createElement("div"); sug.className = "sug";
@@ -1277,7 +1277,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   }
   ["wKcal", "wSteps", "wTrust"].forEach((id) => $(id).addEventListener("input", () => { watchDirty = true; updateEst(); }));
   $("wGym").addEventListener("change", () => { watchDirty = true; updateEst(); updateTrustLabel(); });
-  const GYM_LABELS = { bike: "Bike", elliptical: "Elliptical", treadmill: "Treadmill walk", running: "Running", weights: "Weights", swimming: "Swimming" };
+  const GYM_LABELS = { bike: "Bike", elliptical: "Elliptical", treadmill: "Walk (treadmill or outside)", running: "Running", weights: "Weights", swimming: "Swimming" };
   function renderGymRows() {
     const list = $("gymList"); list.innerHTML = "";
     gymRows.forEach((r, i) => {
