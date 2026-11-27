@@ -26,7 +26,7 @@ Repo **Settings → Pages → Source: Deploy from a branch → Branch: `main`, f
 
 ### 3. Create the Cloudflare Worker
 1. Go to **dash.cloudflare.com → Workers & Pages → Create → Create Worker**.
-2. Name it `burn-bank` → **Deploy**.
+2. Name it `burn-bank-ai` → **Deploy**. Do NOT connect this Worker to GitHub: it is the AI helper, and its code is pasted in by hand.
 3. Click **Edit code**, delete everything, paste the contents of `worker/worker.js`, then **Deploy**.
 4. Go to the Worker's **Settings → Variables and Secrets** and add:
 
@@ -35,7 +35,7 @@ Repo **Settings → Pages → Source: Deploy from a branch → Branch: `main`, f
 | `ANTHROPIC_API_KEY` | Secret | your key from step 2 |
 | `ALLOWED_ORIGINS` | Text | `https://cyberosos.github.io` |
 
-5. Name the Worker exactly `burn-bank` so its address matches the one built into the app.
+5. The app finds the AI at `burn-bank-ai.<your-subdomain>.workers.dev` by itself.
 
 ### 4. That's it
 The app has the Worker address built in (`https://burn-bank.hamdeen96.workers.dev`), so the AI works as soon as the Worker is deployed. No passcode or setup in the app.

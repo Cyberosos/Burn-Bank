@@ -698,7 +698,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
       </div>
     </div>
   </section>
-  <div class="ver" data-tabs="history">Burn Bank v34</div>
+  <div class="ver" data-tabs="history">Burn Bank v35</div>
 </div>
 
 <nav class="tabbar" aria-label="Sections">
@@ -1694,13 +1694,13 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
     return s;
   }
   // Built-in AI server, same approach as the tashkeel app: no setup needed.
-  const DEFAULT_AI_URL = "https://burn-bank.osos-labs.workers.dev";
+  const DEFAULT_AI_URL = "https://burn-bank-ai.osos-labs.workers.dev";
   function startWebMode() {
     webMode = true;
     const ai = readAi();
     // On a *.workers.dev address, find the AI on the same account subdomain, so renaming the subdomain can't break it.
     const h = location.hostname.split(".");
-    const sameAccount = h.length >= 4 && h.slice(-2).join(".") === "workers.dev" ? "https://burn-bank." + h[h.length - 3] + ".workers.dev" : "";
+    const sameAccount = h.length >= 4 && h.slice(-2).join(".") === "workers.dev" ? "https://burn-bank-ai." + h[h.length - 3] + ".workers.dev" : "";
     const url = sameAccount || ai.url || DEFAULT_AI_URL;
     $("aiUrl").value = url; $("aiPass").value = ai.pass || "";
     setupPhoto(makeWorkerSample(url, ai.pass || ""));
